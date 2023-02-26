@@ -2,7 +2,6 @@
 *.out
 *.tsv
 *.csv
-*.txt
 *.pyc
 *.cache
 __pycache__
