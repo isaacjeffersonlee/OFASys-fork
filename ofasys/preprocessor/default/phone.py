@@ -19,13 +19,26 @@ from ..dictionary import Dictionary
 from ..instruction import Slot
 from ..utils import collate_tokens
 from .base import CollateOutput, PreprocessConfig, SafeBasePreprocess
+from ofasys.utils.file_utils import OFA_CACHE_HOME
+import os
+
+if OFA_CACHE_HOME in [None, "", " "]:
+    raise EnvironmentError(
+        f"Environment variable {OFA_CACHE_HOME} is not bound, but should have been set by pipeline.py"
+    )
+DEFAULT_VOCAB_TXT_PATH = os.path.join(OFA_CACHE_HOME, "vocab.txt")
 
 
 @dataclass
 class PhonePreprocessConfig(PreprocessConfig):
-    phone_dict_file: str = field(default='oss://ofasys/tasks/tts/vocab.txt', metadata={"help": "phone dict file"})
+    phone_dict_file: str = field(
+        default=DEFAULT_VOCAB_TXT_PATH, metadata={"help": "phone dict file"}
+    )
     use_t2p: bool = field(default=False, metadata={"help": "whether to use text2phone"})
-    lang: str = field(default="zh", metadata={"help": "language of text input", "choices": ["zh", "en"]})
+    lang: str = field(
+        default="zh",
+        metadata={"help": "language of text input", "choices": ["zh", "en"]},
+    )
 
 
 @register_config("ofasys.preprocess", "phone", PhonePreprocessConfig)
@@ -47,7 +60,9 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
                 self.global_dict.add_symbol("<phone>_{}".format(line))
         self.global_dict.add_symbol("<phone>_unk")
         self.global_dict.add_symbol("<phone>_dict_end")
-        self.dict_phone_start = self.global_dict.index("<phone>_dict_begin") + 1  # not counting '<phone>_dict_begin'
+        self.dict_phone_start = (
+            self.global_dict.index("<phone>_dict_begin") + 1
+        )  # not counting '<phone>_dict_begin'
         self.dict_phone_end = self.global_dict.index(
             "<phone>_unk"
         )  # not counting '<phone>_unk' and '<phone>_dict_end'
@@ -68,12 +83,16 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
         phone_item = " ".join(["<phone>_{}".format(x) for x in phone.split(" ")])
         tokens = self.encode(phone_item)
 
-        if slot.is_src and slot.split == "train" and slot.get_attr('mask_ratio', float):
+        if slot.is_src and slot.split == "train" and slot.get_attr("mask_ratio", float):
             tokens = torch.tensor(tokens)
-            tokens = self._add_noise(tokens, p=slot.get_attr('mask_ratio', float))
+            tokens = self._add_noise(tokens, p=slot.get_attr("mask_ratio", float))
 
         tokens = torch.cat(
-            [torch.LongTensor([self.global_dict.bos()]), tokens, torch.LongTensor([self.global_dict.eos()])]
+            [
+                torch.LongTensor([self.global_dict.bos()]),
+                tokens,
+                torch.LongTensor([self.global_dict.eos()]),
+            ]
         )
         slot.value = tokens
         return slot
@@ -86,7 +105,9 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
             phone[indices] = self.dict_phone_end
             if mask_random.sum() > 0:
                 phone[indices[mask_random]] = torch.randint(
-                    self.dict_phone_start, self.dict_phone_end, size=(mask_random.sum(),)
+                    self.dict_phone_start,
+                    self.dict_phone_end,
+                    size=(mask_random.sum(),),
                 )
         return phone
 
@@ -94,8 +115,12 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
         return ModalityType.TEXT
 
     def encode(self, phone_item):
-        tokens = self.global_dict.encode_line(line=phone_item, add_if_not_exist=False, append_eos=False).long()
-        tokens[tokens == self.global_dict.index("<unk>")] = self.global_dict.index("<phone>_unk")
+        tokens = self.global_dict.encode_line(
+            line=phone_item, add_if_not_exist=False, append_eos=False
+        ).long()
+        tokens[tokens == self.global_dict.index("<unk>")] = self.global_dict.index(
+            "<phone>_unk"
+        )
         return tokens
 
     def decode(self, tokens, escape_unk=False):
@@ -109,8 +134,11 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
             unk_string=("UNKNOWNTOKENINREF" if escape_unk else "UNKNOWNTOKENINHYP"),
         )
 
-        pattern = re.compile(r'^<phone>_(.*)$')
-        s = " ".join(x.strip("<phone>_") if pattern.match(x) is not None else x for x in s.split(" "))
+        pattern = re.compile(r"^<phone>_(.*)$")
+        s = " ".join(
+            x.strip("<phone>_") if pattern.match(x) is not None else x
+            for x in s.split(" ")
+        )
 
         return s
 
@@ -143,16 +171,18 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
             )
 
         if slots[0].is_src:
-            slots[0].value = _collate('inputs')
+            slots[0].value = _collate("inputs")
             return CollateOutput(slots[0])
         else:
             input_slot, target_slot = copy.copy(slots[0]), copy.copy(slots[0])
             for slot in slots:
-                slot.value['prev_output_tokens'] = slot.value['inputs'][:-1]  # skip <EOS>
-            input_slot.value = _collate('prev_output_tokens')
+                slot.value["prev_output_tokens"] = slot.value["inputs"][
+                    :-1
+                ]  # skip <EOS>
+            input_slot.value = _collate("prev_output_tokens")
             for slot in slots:
-                slot.value['target'] = slot.value['target'][1:]  # skip <BOS>
-            target_slot.value = _collate('target')
+                slot.value["target"] = slot.value["target"][1:]  # skip <BOS>
+            target_slot.value = _collate("target")
 
             # for lagecy compatible
             ntokens = target_slot.value.ne(self.global_dict.pad()).long().sum().item()
@@ -160,8 +190,8 @@ class DefaultPhonePreprocess(SafeBasePreprocess):
                 "target": target_slot.value,
                 "ntokens": ntokens,
             }
-            if slots[0].value['constraint_masks'] is not None:
-                extra_dict['constraint_masks'] = _collate('constraint_masks')[:, 1:]
+            if slots[0].value["constraint_masks"] is not None:
+                extra_dict["constraint_masks"] = _collate("constraint_masks")[:, 1:]
             return CollateOutput(input_slot, target_slot, extra_dict)
 
     def __call__(self, x):
@@ -176,11 +206,11 @@ def phonemize(text, lang="en", split_="|"):
         global g2p
         if g2p is None:
             _nltk_paths = [
-                'nltk/corpora/cmudict/cmudict',
-                'nltk/corpora/cmudict/README',
-                'nltk/taggers/averaged_perceptron_tagger/averaged_perceptron_tagger.pickle',
-                'nltk/corpora/cmudict.zip',
-                'nltk/taggers/averaged_perceptron_tagger.zip',
+                "nltk/corpora/cmudict/cmudict",
+                "nltk/corpora/cmudict/README",
+                "nltk/taggers/averaged_perceptron_tagger/averaged_perceptron_tagger.pickle",
+                "nltk/corpora/cmudict.zip",
+                "nltk/taggers/averaged_perceptron_tagger.zip",
             ]
             from ofasys.utils.fetch_nltk import fetch_nltk_data
 
