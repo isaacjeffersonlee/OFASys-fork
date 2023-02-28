@@ -7,6 +7,7 @@ from typing import List
 
 import numpy as np
 import torch
+import os
 from PIL import Image
 from torchvision import transforms
 
@@ -20,16 +21,27 @@ from ..utils import collate_tokens
 from .base import CollateOutput, PreprocessConfig, SafeBasePreprocess
 from .image import load_image
 
+OFA_CACHE_HOME = os.getenv("OFA_CACHE_HOME")
+if OFA_CACHE_HOME in [None, "", " "]:
+    raise EnvironmentError(
+        f"Environment variable {OFA_CACHE_HOME} is not bound, but should have been set in organiser.py. Current file is {__file__}"
+    )
+
 
 @dataclass
 class VQGANCodePreprocessConfig(PreprocessConfig):
     code_image_size: int = field(default=256, metadata={"help": "code image size"})
     vqgan_factor: int = field(default=8, metadata={"help": "vqgan factor"})
     code_dict_size: int = field(default=8192, metadata={"help": "code dict size"})
-    code_entry_prefix: str = field(default='code', metadata={"help": "prefix of code entry in the global_dict"})
-    use_encode: bool = field(default=True, metadata={"help": "where to use tokenizer.encode in map"})
+    code_entry_prefix: str = field(
+        default="code", metadata={"help": "prefix of code entry in the global_dict"}
+    )
+    use_encode: bool = field(
+        default=True, metadata={"help": "where to use tokenizer.encode in map"}
+    )
     clip_model: str = field(
-        default='oss://ofasys/tasks/image_gen/clip/ViT-B-16.pt', metadata={"help": "model path for a clip reranker"}
+        default=os.path.join(OFA_CACHE_HOME, "ViT-B-16.pt"),
+        metadata={"help": "model path for a clip reranker"},
     )
 
 
@@ -45,15 +57,18 @@ class VQGANCodePreprocess(SafeBasePreprocess):
         self.num_codes = cfg.code_dict_size
         for i in range(self.num_codes):
             # global_dict.add_symbol("<{}_{}>".format(cfg.code_entry_prefix, i))
-            global_dict.add_symbol(f'<code>_{i}')
+            global_dict.add_symbol(f"<code>_{i}")
         # get the start position of code entry in global dict
-        self.code_index_start = self.global_dict.index('<code>_0')
+        self.code_index_start = self.global_dict.index("<code>_0")
         assert self.code_index_start >= 0
         self.code_image_size = cfg.code_image_size
         self.code_resize_transform_pil_image = transforms.Compose(
             [
                 lambda image: image.convert("RGB"),
-                transforms.Resize((cfg.code_image_size, cfg.code_image_size), interpolation=Image.LANCZOS),
+                transforms.Resize(
+                    (cfg.code_image_size, cfg.code_image_size),
+                    interpolation=Image.LANCZOS,
+                ),
                 transforms.ToTensor(),
                 preprocess_vqgan,
             ]
@@ -63,7 +78,10 @@ class VQGANCodePreprocess(SafeBasePreprocess):
             [
                 transforms.ToPILImage(),
                 lambda image: image.convert("RGB"),
-                transforms.Resize((cfg.code_image_size, cfg.code_image_size), interpolation=Image.LANCZOS),
+                transforms.Resize(
+                    (cfg.code_image_size, cfg.code_image_size),
+                    interpolation=Image.LANCZOS,
+                ),
                 transforms.ToTensor(),
                 preprocess_vqgan,
             ]
@@ -73,7 +91,7 @@ class VQGANCodePreprocess(SafeBasePreprocess):
 
             self.clip = clip
             local_path = cached_path(cfg.clip_model)
-            clip_model, clip_preprocess = clip.load(local_path, 'cpu')
+            clip_model, clip_preprocess = clip.load(local_path, "cpu")
             self.clip_model = clip_model
             self.clip_preprocess = clip_preprocess
             self.clip_model.eval()
@@ -102,26 +120,39 @@ class VQGANCodePreprocess(SafeBasePreprocess):
             return slot
         else:
             code = slot.value
-        if isinstance(code, np.ndarray) and np.issubdtype(code.dtype, np.integer) and code.ndim == 1:
+        if (
+            isinstance(code, np.ndarray)
+            and np.issubdtype(code.dtype, np.integer)
+            and code.ndim == 1
+        ):
             tokens = torch.LongTensor(code)
-        elif (isinstance(code, torch.IntTensor) or isinstance(code, torch.LongTensor)) and code.ndim == 1:
+        elif (
+            isinstance(code, torch.IntTensor) or isinstance(code, torch.LongTensor)
+        ) and code.ndim == 1:
             tokens = code.long()
         elif isinstance(code, str):
             tokens = self.split_str(code)
         else:
-            raise ValueError("Incorrect input for code, only support string or 1-d int Tensor, " f"got {type(code)}")
+            raise ValueError(
+                "Incorrect input for code, only support string or 1-d int Tensor, "
+                f"got {type(code)}"
+            )
 
         # TODO: add a parameter to control whether use these preprocess.
 
-        if slot.get_attr('length') is not None:
-            length = int(slot.get_attr('length'))
+        if slot.get_attr("length") is not None:
+            length = int(slot.get_attr("length"))
             tokens = tokens[:length]
 
         # add vocab size
         tokens = tokens + self.code_index_start
         if slot.is_src is False:
             tokens = torch.cat(
-                [torch.LongTensor([self.global_dict.bos()]), tokens, torch.LongTensor([self.global_dict.eos()])]
+                [
+                    torch.LongTensor([self.global_dict.bos()]),
+                    tokens,
+                    torch.LongTensor([self.global_dict.eos()]),
+                ]
             )
         slot.value = tokens
         return slot
@@ -131,7 +162,6 @@ class VQGANCodePreprocess(SafeBasePreprocess):
         return torch.LongTensor(tokens)
 
     def preprocess_image(self, image, **kwargs):
-
         if isinstance(image, np.ndarray) or isinstance(image, torch.Tensor):
             if isinstance(image, np.ndarray):
                 image = torch.from_numpy(image)
@@ -188,7 +218,9 @@ class VQGANCodePreprocess(SafeBasePreprocess):
                 )
 
                 # for lagecy compatible
-                ntokens = target_slot.value.ne(self.global_dict.pad()).long().sum().item()
+                ntokens = (
+                    target_slot.value.ne(self.global_dict.pad()).long().sum().item()
+                )
                 extra_dict = {
                     "target": target_slot.value,
                     "ntokens": ntokens,
@@ -200,8 +232,9 @@ class VQGANCodePreprocess(SafeBasePreprocess):
         return self.tokenizer.decode(tokens, **kwargs)
 
     def rerank_with_clip(self, images, text):
-
-        clip_images_input = torch.stack([self.clip_preprocess(hyp_image) for hyp_image in images], dim=0).cpu()
+        clip_images_input = torch.stack(
+            [self.clip_preprocess(hyp_image) for hyp_image in images], dim=0
+        ).cpu()
         clip_text_input = self.clip.tokenize([text]).cpu()
         with torch.no_grad():
             hyp_image_features = self.clip_model.encode_image(clip_images_input)
