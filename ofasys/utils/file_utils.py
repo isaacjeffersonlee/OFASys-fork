@@ -31,7 +31,7 @@ except ImportError:
     from urlparse import urlparse
 
 
-OFA_CACHE_HOME = os.path.expanduser(os.getenv("OFA_CACHE_HOME", "~/.cache/ofa"))
+OFA_CACHE_HOME = os.getenv("OFA_CACHE_HOME")
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

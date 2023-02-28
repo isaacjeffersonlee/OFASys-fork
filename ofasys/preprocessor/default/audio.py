@@ -19,6 +19,14 @@ import torch
 import torch.nn.functional as F
 
 from ofasys.utils.logging_utils import master_logging
+import os
+from ofasys.utils.file_utils import OFA_CACHE_HOME
+
+if OFA_CACHE_HOME in [None, "", " "]:
+    raise EnvironmentError(
+        f"Environment variable {OFA_CACHE_HOME} is not bound, but should have been set by pipeline.py"
+    )
+DEFAULT_CONFIG_YAML = os.path.join(OFA_CACHE_HOME, "config.yaml")
 
 _no_soundfile_help = (
     "No soundfile found, please install it by `pip install soundfile` if you need to support audio tasks"
@@ -164,7 +172,7 @@ class AudioPreprocessConfig(PreprocessConfig):
     spec_bwd_max_iter: int = field(default=8, metadata={"help": "spec_bwd_max_iter"})
     speed_augmentation: str = field(default="[1.0]", metadata={"help": "data augmentation that change audio speed"})
     config_yaml: Optional[str] = field(
-        default='oss://ofasys/tasks/asr/config.yaml', metadata={"help": "data augmentation for fbank"}
+        default=DEFAULT_CONFIG_YAML, metadata={"help": "data augmentation for fbank"}
     )
     output_frame_dim: int = field(default=80, metadata={"help": "output_frame_dim"})
     n_frames_per_step: int = field(default=1, metadata={"help": "pack fbank n_frames_per_step"})

@@ -13,7 +13,7 @@ from torchvision import transforms
 
 from ofasys import ModalityType
 from ofasys.configure import register_config
-from ofasys.utils.file_utils import cached_path
+from ofasys.utils.file_utils import cached_path, OFA_CACHE_HOME
 
 from ..dictionary import Dictionary
 from ..instruction import Slot
@@ -21,11 +21,11 @@ from ..utils import collate_tokens
 from .base import CollateOutput, PreprocessConfig, SafeBasePreprocess
 from .image import load_image
 
-OFA_CACHE_HOME = os.getenv("OFA_CACHE_HOME")
 if OFA_CACHE_HOME in [None, "", " "]:
     raise EnvironmentError(
         f"Environment variable {OFA_CACHE_HOME} is not bound, but should have been set in organiser.py. Current file is {__file__}"
     )
+DEFAULT_VIT_MODEL_FILE = os.path.join(OFA_CACHE_HOME, "ViT-B-16.pt")
 
 
 @dataclass
@@ -40,7 +40,7 @@ class VQGANCodePreprocessConfig(PreprocessConfig):
         default=True, metadata={"help": "where to use tokenizer.encode in map"}
     )
     clip_model: str = field(
-        default=os.path.join(OFA_CACHE_HOME, "ViT-B-16.pt"),
+        default=DEFAULT_VIT_MODEL_FILE,
         metadata={"help": "model path for a clip reranker"},
     )
 

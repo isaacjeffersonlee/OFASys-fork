@@ -4,8 +4,8 @@
 
 from .gpt2_bpe_utils import get_encoder
 import os
+from ofasys.utils.file_utils import OFA_CACHE_HOME
 
-OFA_CACHE_HOME = os.getenv("OFA_CACHE_HOME")
 if OFA_CACHE_HOME in [None, "", " "]:
     raise EnvironmentError(
         f"Environment variable {OFA_CACHE_HOME} is not bound, but should have been set by pipeline.py"
