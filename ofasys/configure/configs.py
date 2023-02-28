@@ -846,7 +846,7 @@ class InteractiveConfig(BaseDataclass):
 
 @dataclass
 class EMAConfig(BaseDataclass):
-    store_ema: bool = field(default=False, metadata={help: "store exponential moving average shadow model"})
+    store_ema: bool = field(default=False, metadata={"help": "store exponential moving average shadow model"})
     ema_decay: float = field(default=0.9999, metadata={"help": 'decay for exponential moving average model'})
     ema_start_update: int = field(default=0, metadata={"help": "start EMA update after this many model updates"})
     ema_seed_model: Optional[str] = field(
