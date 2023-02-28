@@ -15,7 +15,15 @@ from ofasys.configure import register_config
 from ofasys.module import Embedding
 from ofasys.preprocessor import Dictionary
 from ofasys.preprocessor.tokenizer.vqgan import VQGANTokenizer
+from ofasys.utils.file_utils import OFA_CACHE_HOME
+import os
 
+if OFA_CACHE_HOME in [None, "", " "]:
+    raise EnvironmentError(
+        f"Environment variable {OFA_CACHE_HOME} is not bound, but should have been set by pipeline.py"
+    )
+DEFAULT_LAST_CKPT_PATH = os.path.join(OFA_CACHE_HOME, "last.ckpt")
+DEFAULT_MODEL_YAML = os.path.join(OFA_CACHE_HOME, "model.yaml")
 
 def make_vqgan_code_bucket_position(bucket_size, num_relative_distance):
     coords_h = torch.arange(bucket_size)
@@ -47,11 +55,11 @@ class ImageVqganAdaptorConfig(BaseAdaptorConfig):
     )
     vqgan_factor: int = field(default=8, metadata={"help": "vqgan factor"})
     vqgan_model_path: str = field(
-        default="oss://ofasys/tasks/image_gen/vqgan/last.ckpt",
+        default=DEFAULT_LAST_CKPT_PATH,
         metadata={"help": "path of vqgan model"},
     )
     vqgan_config_path: str = field(
-        default="oss://ofasys/tasks/image_gen/vqgan/model.yaml",
+        default=DEFAULT_MODEL_YAML,
         metadata={"help": "path of vqgan config"},
     )
     use_encode: bool = field(default=True, metadata={"help": "where to use tokenizer.encode in map"})
