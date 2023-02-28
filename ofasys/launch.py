@@ -8,11 +8,9 @@ import codecs
 import copy
 import json
 import os
-import re
-import shlex
 import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import yaml
 
